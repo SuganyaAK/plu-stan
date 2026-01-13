@@ -57,6 +57,7 @@ module Stan.Inspection.AntiPattern
     , plustan07
     , plustan08
     , plustan09
+    , plustan10
     -- * All inspections
     , antiPatternInspectionsMap
     ) where
@@ -110,7 +111,7 @@ antiPatternInspectionsMap = fromList $ fmapToFst inspectionId
     , plustan07
     , plustan08
     , plustan09
-    ]
+    , plustan10
 
 -- | Smart constructor to create anti-pattern 'Inspection'.
 mkAntiPatternInspection :: Id Inspection -> Text -> InspectionAnalysis -> Inspection
@@ -672,3 +673,68 @@ plustan09 = mkAntiPatternInspection (Id "PLU-STAN-09") "valueOf in boolean condi
         , "Consider 'valueEq' when comparing full values"
         ]
     & severityL .~ Warning
+
+-- plustan10 :: Inspection for Validity Interval Misuse
+plustan10 :: Inspection
+plustan10 = mkAntiPatternInspection (Id "PLU-STAN-10") "Validity Interval Misuse"
+    (FindAst validityPat)
+    & descriptionL .~ "Unsafe txInfoValidRange usage: comparing to single bounds or unbounded intervals undermines time logic."
+    & solutionL .~
+        [ "Use `interval lower upper `contains` txInfoValidRange info` (both bounds)"
+        , "Avoid `txInfoValidRange info `contains` now` or `from X `contains` txInfoValidRange info`"
+        , "Never use exact slot equality: `txInfoValidRange info == SlotRange X X` (impossible)"
+        ]
+    & severityL .~ Warning
+
+where
+    validityPat :: PatternAst
+    validityPat = unsafeContainsPat ||| exactSlotPat ||| unboundedPat
+
+    -- BAD 1: txInfoValidRange contains/compared to single POSIXTime
+    unsafeContainsPat :: PatternAst
+    unsafeContainsPat = 
+        app (PatternAstName containsMeta (?)) (txInfoValidRangePat |-> singleTimePat)
+        ||| app (txInfoValidRangePat |-> singleTimePat) (PatternAstName containsMeta (?))
+
+    -- BAD 2: txInfoValidRange == exact SlotRange (impossible)
+    exactSlotPat :: PatternAst
+    exactSlotPat = opApp txInfoValidRangePat eqOp exactSlotRangePat
+
+    -- BAD 3: from/unbounded contains txInfoValidRange
+    unboundedPat :: PatternAst
+    unboundedPat = 
+        app fromPat (txInfoValidRangePat |-> (?))  -- from X contains txInfoValidRange
+        ||| app (txInfoValidRangePat |-> fromPat (?)) (?)  -- txInfoValidRange contains from X
+
+    -- Helpers (AST patterns)
+    txInfoValidRangePat :: PatternAst
+    txInfoValidRangePat = PatternAstName txInfoValidRangeMeta (infoPat |-> ?)
+
+    infoPat :: PatternAst
+    infoPat = PatternAstVarName "info" ||| PatternAstVarName "ctx"
+
+    txInfoValidRangeMeta :: NameMeta
+    txInfoValidRangeMeta = plutusTxNameFrom "txInfoValidRange" "PlutusLedgerApi.V1.Contexts"
+
+    containsMeta :: NameMeta
+    containsMeta = plutusTxNameFrom "contains" "PlutusLedgerApi.V1.Interval"
+
+    eqOp :: PatternAst
+    eqOp = PatternAstName (ghcPrimNameFrom "==" "GHC.Classes") (?)
+
+    exactSlotRangePat :: PatternAst
+    exactSlotRangePat = PatternAstApp 
+        (PatternAstName (plutusTxNameFrom "interval" "PlutusLedgerApi.V1.Interval") (?))
+        (PatternAstTuple [slotLit, slotLit])  -- same lower/upper
+
+    slotLit :: PatternAst
+    slotLit = PatternAstConstant (ExactNum ?)
+
+    fromPat :: PatternAst
+    fromPat = PatternAstName (plutusTxNameFrom "from" "PlutusLedgerApi.V1.Interval") (singleTimePat |-> ?)
+
+    singleTimePat :: PatternAst
+    singleTimePat = 
+        PatternAstName (plutusTxNameFrom "now" "PlutusLedgerApi.V1.Contexts") (? )  -- now
+        ||| PatternAstConstant ExactNum (?)  -- literal time
+        ||| PatternAstName (plutusTxNameFrom "slotToPOSIXTime" "PlutusLedgerApi.V1.Interval") (?)
