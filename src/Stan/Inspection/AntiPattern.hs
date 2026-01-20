@@ -57,6 +57,7 @@ module Stan.Inspection.AntiPattern
     , plustan07
     , plustan08
     , plustan09
+    , plustan10
     -- * All inspections
     , antiPatternInspectionsMap
     ) where
@@ -81,7 +82,19 @@ import Stan.Core.ModuleName
 import qualified Data.List.NonEmpty as NE
 import qualified Stan.Category as Category
 
+plutusTxNameFrom' :: Text -> Text -> NameMeta
+plutusTxNameFrom' funName moduleName = NameMeta
+    { nameMetaName       = funName
+    , nameMetaModuleName = ModuleName moduleName
+    , nameMetaPackage    = ""
+    }
 
+plutusLedgerApiNameFrom' :: Text -> Text -> NameMeta
+plutusLedgerApiNameFrom' funName moduleName = NameMeta
+    { nameMetaName       = funName
+    , nameMetaModuleName = ModuleName moduleName
+    , nameMetaPackage    = ""
+    }
 -- | All anti-pattern 'Inspection's map from 'Id's.
 antiPatternInspectionsMap :: InspectionsMap
 antiPatternInspectionsMap = fromList $ fmapToFst inspectionId
@@ -110,6 +123,7 @@ antiPatternInspectionsMap = fromList $ fmapToFst inspectionId
     , plustan07
     , plustan08
     , plustan09
+    , plustan10
     ]
 
 -- | Smart constructor to create anti-pattern 'Inspection'.
@@ -672,3 +686,106 @@ plustan09 = mkAntiPatternInspection (Id "PLU-STAN-09") "valueOf in boolean condi
         , "Consider 'valueEq' when comparing full values"
         ]
     & severityL .~ Warning
+
+plustan10 :: Inspection
+plustan10 = mkAntiPatternInspection (Id "PLU-STAN-10") "Validity Interval Misuse"
+    (FindAst validityPat)
+    & descriptionL .~ "Unsafe txInfoValidRange usage: comparing to single bounds or unbounded intervals undermines time logic."
+    & solutionL .~
+        [ "Use `interval lower upper `contains` txInfoValidRange info` (both bounds)"
+        , "Avoid `txInfoValidRange info `contains` now` or `from X `contains` txInfoValidRange info`"
+        , "Never use exact slot equality: `txInfoValidRange info == SlotRange X X` (impossible)"
+        ]
+    & severityL .~ Warning
+  where
+    validityPat :: PatternAst
+    validityPat = unsafeContainsPat ||| exactSlotPat ||| unboundedPat
+
+    unsafeContainsPat :: PatternAst
+    unsafeContainsPat =
+         app (app containsMeta (?)) (?)
+
+    fromPat :: PatternAst
+    fromPat = app fromMeta timePat
+
+    fromMeta :: PatternAst
+    fromMeta = anyOfModules "from" intervalModules
+
+    timePat :: PatternAst
+    timePat = 
+        PatternAstVarName "now" ||| PatternAstVarName "currentTime" ||| PatternAstVarName "deadline"
+        ||| app posixTimeMeta (PatternAstConstant AnyLiteral)
+        ||| app slotMeta (PatternAstConstant AnyLiteral)
+        ||| PatternAstConstant (ExactNum 0)
+        ||| PatternAstConstant (ExactNum 1)
+        ||| PatternAstConstant (AnyLiteral)
+
+    exactSlotPat :: PatternAst
+    exactSlotPat = opApp txInfoValidRangePat eqOp exactSlotRangePat
+
+    unboundedPat :: PatternAst
+    unboundedPat =
+        app (app containsMeta (fromPat)) (txInfoValidRangePat)
+         ||| app (app containsMeta (txInfoValidRangePat)) (fromPat)
+
+    txInfoValidRangePat :: PatternAst
+    txInfoValidRangePat = app (txInfoValidRangeMeta) (?)
+
+    containsMeta :: PatternAst
+    containsMeta = PatternAstVarName "contains"
+    
+    posixTimeMeta :: PatternAst
+    posixTimeMeta = anyOfModules "POSIXTime" timeModules
+
+    slotMeta :: PatternAst
+    slotMeta = anyOfModules "Slot" timeModules
+
+    intervalModules :: [Text]
+    intervalModules = 
+        [ "Interval"        
+        , "Contexts"         
+        , "PlutusLedgerApi.V1.Interval"
+        , "PlutusTx.Interval"
+        ]
+
+    contextModules :: [Text]
+    contextModules = 
+        [ "Contexts"
+        , "PlutusLedgerApi.V1.Contexts"
+        , "Plutus.V1.Ledger.Contexts"
+        , "PlutusLedgerApi.V1"
+        , "Plutus.V1.Ledger.Api"
+        , "PlutusTx.Contexts"
+        ]
+
+    timeModules :: [Text]
+    timeModules =
+        [ "Time"
+        , "PlutusLedgerApi.V1.Time"
+        , "Plutus.V1.Ledger.Time"
+        ]
+
+    txInfoValidRangeMeta :: PatternAst
+    txInfoValidRangeMeta = anyOfModules "txInfoValidRange" contextModules
+
+    eqOp :: PatternAst
+    eqOp = PatternAstName (plutusTxNameFrom' "==" "PlutusTx.Eq") (?)
+        ||| PatternAstName (ghcPrimNameFrom "==" "GHC.Classes") (?)
+        ||| PatternAstName (ghcPrimNameFrom "==" "GHC.Base") (?)
+
+    exactSlotRangePat :: PatternAst
+    exactSlotRangePat = app
+        (app (anyOfModules "interval" intervalModules) slotLit)
+        slotLit 
+
+    anyOfModules :: Text -> [Text] -> PatternAst
+    anyOfModules name mods = foldr (|||) nonMatchingPattern $
+        map (\m -> PatternAstName (plutusLedgerApiNameFrom' name m) (?) ||| PatternAstName (plutusTxNameFrom' name m) (?)) mods
+        where
+        nonMatchingPattern = PatternAstName (NameMeta "" "" "") (?)
+        
+    slotLit :: PatternAst
+    slotLit = app (anyOfModules "Slot" ("PlutusLedgerApi.V1.Slot":"Plutus.V1.Ledger.Slot":contextModules)
+                   ||| anyOfModules "POSIXTime" ("PlutusLedgerApi.V1.Time":"Plutus.V1.Ledger.Time":intervalModules))
+                  (PatternAstConstant AnyLiteral)
+              ||| PatternAstConstant AnyLiteral
