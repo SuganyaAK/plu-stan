@@ -57,6 +57,7 @@ module Stan.Inspection.AntiPattern
     , plustan07
     , plustan08
     , plustan09
+    , plustan11
     -- * All inspections
     , antiPatternInspectionsMap
     ) where
@@ -81,6 +82,19 @@ import Stan.Core.ModuleName
 import qualified Data.List.NonEmpty as NE
 import qualified Stan.Category as Category
 
+plutusTxNameFrom' :: Text -> Text -> NameMeta
+plutusTxNameFrom' funName moduleName = NameMeta
+    { nameMetaName       = funName
+    , nameMetaModuleName = ModuleName moduleName
+    , nameMetaPackage    = ""
+    }
+
+plutusLedgerApiNameFrom' :: Text -> Text -> NameMeta
+plutusLedgerApiNameFrom' funName moduleName = NameMeta
+    { nameMetaName       = funName
+    , nameMetaModuleName = ModuleName moduleName
+    , nameMetaPackage    = ""
+    }
 
 -- | All anti-pattern 'Inspection's map from 'Id's.
 antiPatternInspectionsMap :: InspectionsMap
@@ -110,6 +124,7 @@ antiPatternInspectionsMap = fromList $ fmapToFst inspectionId
     , plustan07
     , plustan08
     , plustan09
+    , plustan11
     ]
 
 -- | Smart constructor to create anti-pattern 'Inspection'.
@@ -672,3 +687,69 @@ plustan09 = mkAntiPatternInspection (Id "PLU-STAN-09") "valueOf in boolean condi
         , "Consider 'valueEq' when comparing full values"
         ]
     & severityL .~ Warning
+
+plustan11 :: Inspection
+plustan11 = mkAntiPatternInspection (Id "PLU-STAN-11") "PubKeyHash/ScriptHash in fulfillment criteria"
+    (FindAst hashInFulfillmentPat)
+    & descriptionL .~ "Using PubKeyHash or ScriptHash values in fulfillment criteria (e.g., addresses) without validating they're valid cryptographic hashes can lead to unsatisfiable constraints."
+    & solutionL .~
+        [ "Validate the hash is a valid 28-byte hash before using it in address construction"
+        , "Use pattern matching on the hash constructors to ensure structural validity"
+        , "Consider using 'toBuiltinData' / 'fromBuiltinData' roundtrip to validate"
+        ]
+    & severityL .~ Warning
+  where
+    hashInFulfillmentPat :: PatternAst
+    hashInFulfillmentPat = addressConstructionPat ||| credentialConstructionPat
+
+    addressConstructionPat :: PatternAst
+    addressConstructionPat =
+        app (app addressMeta 
+                (app pubKeyCredentialMeta hashVar))
+            nothingMeta
+        ||| app (app addressMeta 
+                  (app scriptCredentialMeta hashVar))
+                nothingMeta
+
+    credentialConstructionPat :: PatternAst
+    credentialConstructionPat =
+        app pubKeyCredentialMeta hashVar
+        ||| app scriptCredentialMeta hashVar
+
+    hashVar :: PatternAst
+    hashVar = PatternAstVarName "pkHash" 
+              ||| PatternAstVarName "scriptHash" 
+              ||| PatternAstVarName "credential"
+              ||| PatternAstVarName "hash"
+              ||| (?)  
+
+    nothingMeta :: PatternAst
+    nothingMeta = PatternAstName (plutusTxNameFrom' "Nothing" "PlutusTx.Maybe") (?)
+
+    addressMeta :: PatternAst
+    addressMeta = anyOfModules "Address" addressModules
+
+    pubKeyCredentialMeta :: PatternAst
+    pubKeyCredentialMeta = anyOfModules "PubKeyCredential" credentialModules
+
+    scriptCredentialMeta :: PatternAst
+    scriptCredentialMeta = anyOfModules "ScriptCredential" credentialModules
+
+    addressModules :: [Text]
+    addressModules =
+        [ "Address"
+        , "PlutusLedgerApi.V1.Address"
+        , "Plutus.V1.Ledger.Address"
+        ]
+
+    credentialModules :: [Text]
+    credentialModules =
+        [ "ScriptCredential"
+        , "PlutusLedgerApi.V1.Credential"
+        , "Plutus.V1.Ledger.Credential"
+        ]
+
+    anyOfModules :: Text -> [Text] -> PatternAst
+    anyOfModules name mods = 
+        foldr (|||) (PatternAstNeg PatternAstAnything) 
+            (map (\m -> PatternAstName (plutusLedgerApiNameFrom' name m) (?)) mods)
