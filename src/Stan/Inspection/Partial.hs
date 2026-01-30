@@ -131,6 +131,7 @@ mkPartialInspectionPattern insId nameMeta@NameMeta{..} pat typeName = Inspection
     , inspectionCategory = one Category.partial
     , inspectionSeverity = Warning
     , inspectionAnalysis = FindAst $ PatternAstName nameMeta pat
+    , aiPrompt = Nothing
     }
 
 -- | Smart constructor to create generic partial 'Inspection' with 'PatternAnything'.

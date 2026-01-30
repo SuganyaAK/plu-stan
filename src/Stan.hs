@@ -184,7 +184,13 @@ runInspection :: InspectionArgs -> IO ()
 runInspection InspectionArgs{..} = case inspectionArgsId of
     Nothing  -> for_ inspections (putTextLn . prettyShowInspectionShort)
     Just insId -> case lookupInspectionById insId of
-        Just ins -> putTextLn $ prettyShowInspection ins
+        Just ins -> do
+            putTextLn $ prettyShowInspection ins
+            case aiPrompt ins of
+                Just prompt -> do
+                    infoMessage "\n Prompt:"
+                    putTextLn $ formatWith [italic] prompt
+                Nothing -> pure ()
         Nothing  -> do
             errorMessage $ "Inspection with such ID does not exist: " <> unId insId
             putTextLn $ " 💡 " <> formatWith [italic] "Use 'stan inspection' to see the list of all available inspections."

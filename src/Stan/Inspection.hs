@@ -11,6 +11,7 @@ module Stan.Inspection
       Inspection (..)
     , categoryL
     , descriptionL
+    , aiPromptL
     , solutionL
     , severityL
     , analysisL
@@ -54,6 +55,7 @@ data Inspection = Inspection
     , inspectionCategory    :: !(NonEmpty Category)
     , inspectionSeverity    :: !Severity
     , inspectionAnalysis    :: !InspectionAnalysis
+    , aiPrompt              :: !(Maybe Text)
     } deriving stock (Show, Eq)
 
 instance ToJSON Inspection where
@@ -70,6 +72,11 @@ descriptionL :: Lens' Inspection Text
 descriptionL = lens
     inspectionDescription
     (\inspection new -> inspection { inspectionDescription = new })
+
+aiPromptL :: Lens' Inspection (Maybe Text)
+aiPromptL = lens
+    aiPrompt
+    (\inspection new -> inspection { aiPrompt = new })
 
 solutionL :: Lens' Inspection [Text]
 solutionL = lens

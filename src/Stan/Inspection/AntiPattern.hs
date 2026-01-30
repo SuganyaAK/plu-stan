@@ -66,7 +66,7 @@ import Relude.Extra.Tuple (fmapToFst)
 
 import Stan.Core.Id (Id (..))
 import Stan.Inspection (Inspection (..), InspectionAnalysis (..), InspectionsMap, categoryL,
-                        descriptionL, severityL, solutionL)
+                        descriptionL, severityL, solutionL, aiPromptL)
 import Stan.NameMeta (ghcPrimNameFrom, NameMeta (..), baseNameFrom, mkBaseFoldableMeta, mkBaseOldListMeta,
                       primTypeMeta, textNameFrom, unorderedNameFrom, _nameFrom, plutusTxNameFrom)
 import Stan.Pattern.Ast (Literal (..), PatternAst (..), anyNamesToPatternAst, app,
@@ -80,6 +80,7 @@ import Stan.Core.ModuleName
 
 import qualified Data.List.NonEmpty as NE
 import qualified Stan.Category as Category
+import Stan.Analysis.Prompts
 
 
 -- | All anti-pattern 'Inspection's map from 'Id's.
@@ -121,6 +122,7 @@ mkAntiPatternInspection insId name inspectionAnalysis = Inspection
     , inspectionSolution = []
     , inspectionCategory = Category.antiPattern :| []
     , inspectionSeverity = PotentialBug
+    , aiPrompt = Nothing
     , ..
     }
 
@@ -232,6 +234,7 @@ stan0206 = Inspection
     , inspectionCategory = Category.spaceLeak :| [Category.syntax]
     , inspectionSeverity = Performance
     , inspectionAnalysis = LazyField
+    , aiPrompt = Nothing
     }
 
 -- | 'Inspection' — 'Foldable' methods on possibly error-prone structures @STAN-0207@.
@@ -353,11 +356,11 @@ filepathOperator = PatternAstName operatorPosix fun
     -}
     filePathType :: PatternType
     filePathType =
-#if __GLASGOW_HASKELL__ < 910
+
         "FilePath" `_nameFrom` "GHC.IO"
-#else
-        "FilePath" `_nameFrom` "GHC.Internal.IO"
-#endif
+
+
+
         |:: []
         ||| stringPattern
         ||| primTypeMeta "[]" |:: [ charPattern ]
@@ -376,19 +379,19 @@ stan0212 = mkAntiPatternInspection (Id "STAN-0212") "unsafe functions" (FindAst 
   where
     pat :: PatternAst
     pat = anyNamesToPatternAst
-#if __GLASGOW_HASKELL__ < 910
+
         $ "undefined" `_nameFrom` "GHC.Err" :|
         [ "unsafeCoerce" `_nameFrom` "Unsafe.Coerce"
         , "unsafePerformIO" `_nameFrom` "GHC.IO.Unsafe"
         , "unsafeInterleaveIO" `_nameFrom` "GHC.IO.Unsafe"
         , "unsafeDupablePerformIO" `_nameFrom` "GHC.IO.Unsafe"
-#else
-        $ "undefined" `_nameFrom` "GHC.Internal.Err" :|
-        [ "unsafeCoerce" `_nameFrom` "GHC.Internal.Unsafe.Coerce"
-        , "unsafePerformIO" `_nameFrom` "GHC.Internal.IO.Unsafe"
-        , "unsafeInterleaveIO" `_nameFrom` "GHC.Internal.IO.Unsafe"
-        , "unsafeDupablePerformIO" `_nameFrom` "GHC.Internal.IO.Unsafe"
-#endif
+
+
+
+
+
+
+
         , "unsafeFixIO" `baseNameFrom` "System.IO.Unsafe"
         ]
 
@@ -459,6 +462,7 @@ plustan03 :: Inspection
 plustan03 = mkAntiPatternInspection (Id "PLU-STAN-03") "No usage of Optional types in on-chain code"
     (FindAst $ PatternAstName useOfFromMaybe (?))
     & descriptionL .~ "No usage of Optional types in on-chain code. No use of Maybe or Either for on-chain code."
+    & aiPromptL .~ Just (getPromptFor "PLU-STAN-03")
     & solutionL .~
         [ "Use fast-fail variants such as `tryFind` instead of `find`",
           "or variants that hanfle the other-case through a continuation function"
@@ -587,11 +591,11 @@ plustan06 = mkAntiPatternInspection (Id "PLU-STAN-06") "Multiple list traversals
 
     dollarNameMetas :: NonEmpty NameMeta
     dollarNameMetas =
-#if __GLASGOW_HASKELL__ < 910
+
         "$" `_nameFrom` "GHC.Base" :|
-#else
-        "$" `_nameFrom` "GHC.Internal.Base" :|
-#endif
+
+
+
         [ "$" `plutusTxNameFrom` "PlutusTx.Prelude"
         ]
 
