@@ -11,6 +11,7 @@ module Stan.Inspection
       Inspection (..)
     , categoryL
     , descriptionL
+    , userPromptL
     , solutionL
     , severityL
     , analysisL
@@ -54,6 +55,7 @@ data Inspection = Inspection
     , inspectionCategory    :: !(NonEmpty Category)
     , inspectionSeverity    :: !Severity
     , inspectionAnalysis    :: !InspectionAnalysis
+    , inspectionPrompt      :: !Text
     } deriving stock (Show, Eq)
 
 instance ToJSON Inspection where
@@ -70,6 +72,11 @@ descriptionL :: Lens' Inspection Text
 descriptionL = lens
     inspectionDescription
     (\inspection new -> inspection { inspectionDescription = new })
+
+userPromptL :: Lens' Inspection Text
+userPromptL = lens
+    inspectionPrompt
+    (\inspection new -> inspection { inspectionPrompt = new })
 
 solutionL :: Lens' Inspection [Text]
 solutionL = lens
@@ -135,6 +142,12 @@ prettyShowInspection Inspection{..} = unlines $
     , ""
     ,  formatWith [green] "Possible solutions:"
     ] <> map ("  - " <>) inspectionSolution
+     <> (if T.null inspectionPrompt then [] 
+            else
+        [ ""
+        , formatWith [green] "User Prompt for LLMs:"
+        , inspectionPrompt
+        ])
 
 -- | Show the short view of a given 'Inspection'.
 prettyShowInspectionShort :: Inspection -> Text

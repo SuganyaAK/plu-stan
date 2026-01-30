@@ -95,6 +95,7 @@ library
                            Stan.Analysis.Pretty
                            Stan.Analysis.Summary
                            Stan.Analysis.Visitor
+                           Stan.Analysis.Prompts
                          Stan.Browse
                          Stan.Cabal
                          Stan.Category
@@ -175,6 +176,9 @@ library
                      -- This should be removed after the research is done
                      , pretty-show
                      , pretty-simple
+                     , text
+                     , file-embed
+                     
   if flag(directory-ospath-streaming)
     build-depends:
                      directory-ospath-streaming ^>= 0.2

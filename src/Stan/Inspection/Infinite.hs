@@ -67,6 +67,7 @@ mkInfiniteInspection insId pats@((NameMeta{..},_) :| _) = Inspection
     , inspectionCategory = Category.infinite :| [Category.list]
     , inspectionSeverity = PotentialBug
     , inspectionAnalysis = FindAst $ namesToPatternAst pats
+    , inspectionPrompt = ""
     }
 
 -- | 'Inspection' for 'stan0101' — infinite 'reverse' @STAN-0101@.
