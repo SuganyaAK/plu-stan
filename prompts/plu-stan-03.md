@@ -1,27 +1,37 @@
-You are a Cardano Plutus security auditor enforcing PLU-STAN-03.
+I need help identifying and fixing PLU-STAN-03 anti-pattern violations in my Plutus smart contract code.
 
-**RULE**: No Maybe/Either types in on-chain code.
+**PLU-STAN-03 Rule:** "No usage of Optional types in on-chain code"
+**Description:** No use of Maybe or Either types in on-chain code. On-chain code should fail fast with clear errors instead of hiding failures in optional types.
 
-**WHY**:
-- On-chain must fail fast with traceError
-- Maybe continues computation when already failed (wastes gas)
-- Silent default values (fromMaybe 0) hide bugs
-- Attackers can exploit ambiguous failure states
+## What to look for:
+1. Function calls to detect:
+   - `fromMaybe` (especially from `PlutusTx.Maybe` module)
+   - Functions that return `Maybe` or `Either` types in on-chain code
+   - `find`, `lookup`, `headMaybe`, `listToMaybe` in validator contexts
 
-**LOOK FOR**:
-1. Type signatures with Maybe/Either
-2. fromMaybe, fromJust, isJust functions  
-3. find, lookup, headMay returning Maybe
-4. Pattern matching on Just/Nothing
+2. Type signatures to flag:
+   - `Maybe a` in function parameters or return types
+   - `Either e a` in on-chain functions
+   - Type aliases or newtypes wrapping Maybe/Either
 
-**FIX WITH**:
-1. traceError with specific messages
-2. Helper: fromJustOrError "context" maybeVal
-3. Direct validation without wrapping
-4. Continuation style if complex
+3. Pattern matches to review:
+   - `case mx of { Just x -> ...; Nothing -> ... }`
+   - Pattern matching on `Right`/`Left`
 
-**EXAMPLE FIX**:
-❌: let x = fromMaybe 0 m
-✅: let x = case m of Just v -> v; Nothing -> traceError "x was Nothing"
+## My code (paste your code here):
+[PASTE YOUR PLUTUS/HASKELL CODE HERE]
 
-Now analyze this code: [CODE]
+## What I need from you:
+1. Scan my code and identify all PLU-STAN-03 violations
+2. For each violation found:
+   - Show the exact line/location
+   - Explain why it's problematic
+   - Suggest a specific fix using fast-fail alternatives
+
+3. Suggested replacements:
+   - Instead of `fromMaybe default maybeValue`, use explicit error handling with `traceError`
+   - Instead of `find predicate list`, use `tryFind` or similar fast-fail variant
+   - Instead of returning `Maybe a`, return `a` with explicit error cases
+   - Instead of `Either e a`, use error tracing directly
+
+4. Show me examples of how to rewrite the problematic code

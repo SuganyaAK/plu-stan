@@ -66,7 +66,7 @@ import Relude.Extra.Tuple (fmapToFst)
 
 import Stan.Core.Id (Id (..))
 import Stan.Inspection (Inspection (..), InspectionAnalysis (..), InspectionsMap, categoryL,
-                        descriptionL, severityL, solutionL, aiPromptL)
+                        descriptionL, severityL, solutionL, userPromptL)
 import Stan.NameMeta (ghcPrimNameFrom, NameMeta (..), baseNameFrom, mkBaseFoldableMeta, mkBaseOldListMeta,
                       primTypeMeta, textNameFrom, unorderedNameFrom, _nameFrom, plutusTxNameFrom)
 import Stan.Pattern.Ast (Literal (..), PatternAst (..), anyNamesToPatternAst, app,
@@ -122,7 +122,7 @@ mkAntiPatternInspection insId name inspectionAnalysis = Inspection
     , inspectionSolution = []
     , inspectionCategory = Category.antiPattern :| []
     , inspectionSeverity = PotentialBug
-    , aiPrompt = Nothing
+    , inspectionPrompt = ""
     , ..
     }
 
@@ -234,7 +234,7 @@ stan0206 = Inspection
     , inspectionCategory = Category.spaceLeak :| [Category.syntax]
     , inspectionSeverity = Performance
     , inspectionAnalysis = LazyField
-    , aiPrompt = Nothing
+    , inspectionPrompt = ""
     }
 
 -- | 'Inspection' — 'Foldable' methods on possibly error-prone structures @STAN-0207@.
@@ -462,10 +462,10 @@ plustan03 :: Inspection
 plustan03 = mkAntiPatternInspection (Id "PLU-STAN-03") "No usage of Optional types in on-chain code"
     (FindAst $ PatternAstName useOfFromMaybe (?))
     & descriptionL .~ "No usage of Optional types in on-chain code. No use of Maybe or Either for on-chain code."
-    & aiPromptL .~ Just (getPromptFor "PLU-STAN-03")
+    & userPromptL .~ getPromptFor "PLU-STAN-03"
     & solutionL .~
         [ "Use fast-fail variants such as `tryFind` instead of `find`",
-          "or variants that hanfle the other-case through a continuation function"
+          "or variants that handle the other-case through a continuation function"
         ]
     & severityL .~ Warning
   where

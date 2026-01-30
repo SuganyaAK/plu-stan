@@ -49,7 +49,7 @@ stan0301 = Inspection
     , inspectionCategory = Category.syntax :| []
     , inspectionSeverity = Style
     , inspectionAnalysis = Infix
-    , aiPrompt = Nothing
+    , inspectionPrompt = ""
     }
 
 -- | 'Inspection' — to big tuples @STAN-0302@.
@@ -65,5 +65,5 @@ stan0302 = Inspection
     , inspectionCategory = Category.antiPattern :| [Category.syntax]
     , inspectionSeverity = Style
     , inspectionAnalysis = BigTuples
-    , aiPrompt = Nothing
+    , inspectionPrompt = ""
     }
